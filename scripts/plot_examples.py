@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from pathlib import Path
+
+MPL_CACHE_DIR = Path("outputs/.matplotlib").resolve()
+MPL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(MPL_CACHE_DIR))
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,4 +76,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

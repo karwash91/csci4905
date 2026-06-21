@@ -55,3 +55,54 @@ Second smoke test:
   - Critical examples appear around the middle density range and have partial burn outcomes.
   - Supercritical examples are dense grids with almost complete burn outcomes.
   - This is balanced enough to proceed to a baseline CNN after creating the full dataset.
+
+### 2026-06-21 - Baseline CNN Classifier
+
+Dataset generation:
+- Command:
+  - `python scripts/generate_dataset.py --samples 3000 --size 64 --output-dir data/synthetic`
+- Result:
+  - `subcritical`: 1003
+  - `critical`: 1144
+  - `supercritical`: 853
+- Generated inspection figure:
+  - `outputs/synthetic_examples.png`
+
+Model:
+- Added `scripts/train_cnn.py`.
+- Input: one-channel `64x64` grid normalized from cell states `0..3` to `0..1`.
+- Architecture: small CNN with three convolution blocks, adaptive average pooling, and a small fully connected classifier.
+- Loss: cross entropy.
+- Optimizer: Adam with learning rate `0.001`.
+- Split: stratified `70/15/15`.
+
+Training command:
+- `python scripts/train_cnn.py --data-dir data/synthetic --output-dir outputs/baseline_cnn --epochs 15 --batch-size 64`
+
+Training result:
+- Dataset size: 3000
+- Split sizes:
+  - train: 2099
+  - validation: 448
+  - test: 453
+- Best validation accuracy: 0.9196
+- Test accuracy: 0.8940
+- Test loss: 0.2380
+- Saved outputs:
+  - `outputs/baseline_cnn/model.pt`
+  - `outputs/baseline_cnn/metrics.json`
+  - `outputs/baseline_cnn/training_curves.png`
+  - `outputs/baseline_cnn/confusion_matrix.png`
+
+Confusion matrix:
+
+| Actual \\ Predicted | subcritical | critical | supercritical |
+| --- | ---: | ---: | ---: |
+| subcritical | 139 | 12 | 0 |
+| critical | 18 | 140 | 15 |
+| supercritical | 0 | 3 | 126 |
+
+Interpretation:
+- The baseline CNN performs well enough to validate the synthetic-data workflow.
+- Most errors involve the `critical` class, which is expected because it represents the transition region rather than a clean extreme.
+- The model almost never confuses subcritical directly with supercritical, suggesting it learned a meaningful density/connectivity signal.
