@@ -106,3 +106,25 @@ Interpretation:
 - The baseline CNN performs well enough to validate the synthetic-data workflow.
 - Most errors involve the `critical` class, which is expected because it represents the transition region rather than a clean extreme.
 - The model almost never confuses subcritical directly with supercritical, suggesting it learned a meaningful density/connectivity signal.
+
+### 2026-06-21 - Results Summary and Report Draft
+
+Added:
+- `scripts/summarize_results.py`
+- `docs/final_report_draft.md`
+
+Summary command:
+- `python scripts/summarize_results.py --metrics outputs/baseline_cnn/metrics.json --output outputs/baseline_cnn/results_summary.md`
+
+Per-class test metrics:
+
+| Class | Precision | Recall | F1 | Support |
+| --- | ---: | ---: | ---: | ---: |
+| subcritical | 0.885 | 0.921 | 0.903 | 151 |
+| critical | 0.903 | 0.809 | 0.854 | 173 |
+| supercritical | 0.894 | 0.977 | 0.933 | 129 |
+
+Interpretation:
+- The `critical` class has the weakest recall because it is the ambiguous transition class.
+- The model is strongest on `supercritical` recall, correctly identifying nearly all high-spread simulations.
+- The report draft now has sections for introduction, data generation, model, results, analysis, limitations, and next steps.
