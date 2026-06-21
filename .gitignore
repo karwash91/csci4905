@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Generated data and model artifacts
+data/
+outputs/
+*.ckpt
+*.pth
+*.pt
+*.npz
+
+# Experiment logs
+wandb/
+lightning_logs/
+runs/
+
+# OS/editor files
+.DS_Store
+~$*.docx
+
