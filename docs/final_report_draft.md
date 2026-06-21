@@ -90,11 +90,58 @@ Confusion matrix figure:
 
 `outputs/baseline_cnn/confusion_matrix.png`
 
+## Model Refinement: Multi-Task CNN
+
+The baseline classifier plateaued after a short training run. Longer training with validation-loss monitoring only produced tiny improvements, so I added a second prediction objective instead of simply training longer.
+
+The refined model uses the same CNN feature extractor, but has two output heads:
+
+- a classification head for `subcritical`, `critical`, and `supercritical`
+- a regression head for continuous burned fraction
+
+The combined loss is:
+
+`total loss = cross entropy class loss + burned fraction SmoothL1 loss`
+
+This gives the model a smoother training signal. The class labels are created by thresholding burned fraction, so the regression task gives extra information about where each sample sits inside or near a class boundary.
+
+Training command:
+
+`python scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn --epochs 40 --batch-size 64 --burn-loss-weight 1.0 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
+
+Multi-task result:
+
+| Metric | Value |
+| --- | ---: |
+| best epoch by validation loss | 26 |
+| test accuracy | 0.8962 |
+| test loss | 0.2349 |
+| burned-fraction MAE | 0.0558 |
+| burned-fraction RMSE | 0.0958 |
+
+Multi-task confusion matrix:
+
+| Actual \ Predicted | subcritical | critical | supercritical |
+| --- | ---: | ---: | ---: |
+| subcritical | 138 | 13 | 0 |
+| critical | 15 | 147 | 11 |
+| supercritical | 0 | 8 | 121 |
+
+Compared with the baseline CNN, the multi-task model slightly improved overall test accuracy from `0.8940` to `0.8962`. More importantly, it improved critical-class recall from `140/173 = 0.809` to `147/173 = 0.849`. This is useful because the critical class is the most important transition region. The tradeoff is that supercritical recall dropped slightly from `126/129 = 0.977` to `121/129 = 0.938`.
+
+Multi-task figures:
+
+`outputs/multitask_cnn/training_curves.png`
+
+`outputs/multitask_cnn/confusion_matrix.png`
+
 ## Analysis
 
 The baseline CNN performed well enough to validate the synthetic-data workflow. It learned to separate the two extreme cases reliably: subcritical fires almost never get confused with supercritical fires.
 
 Most errors occur in the critical class. This makes sense because the critical class represents the transition region, where samples can resemble either nearby extreme depending on the exact tree connectivity. The model appears to learn a useful density/connectivity signal rather than simply memorizing one class.
+
+The multi-task model supports the same conclusion while improving the transition-region behavior. Predicting burned fraction gave the network a continuous target that better reflects the underlying simulation. This did not radically improve overall accuracy, but it made the model better at identifying critical examples, which is the most relevant class for this project.
 
 ## Feature Space Analysis
 

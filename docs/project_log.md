@@ -161,3 +161,91 @@ Interpretation:
 - Critical samples mostly sit between subcritical and supercritical samples.
 - This supports the claim that the classifier learned a meaningful transition-related representation.
 - Some overlap around the critical region is expected because those samples represent boundary behavior.
+
+### 2026-06-21 - Longer Classification Run Plateau
+
+Goal:
+- Compare whether longer training budgets were likely to improve the baseline classifier before spending 30, 60, or 90 minutes on longer runs.
+
+Change:
+- Updated `scripts/train_cnn.py` to support:
+  - validation-loss checkpointing
+  - wall-clock time limits with `--max-minutes`
+  - early stopping with `--patience`
+  - `ReduceLROnPlateau`
+  - saved per-epoch history in `metrics.json`
+
+Trial command:
+- `python -u scripts/train_cnn.py --data-dir data/synthetic --output-dir outputs/refine_30m --epochs 1000 --batch-size 64 --max-minutes 30 --patience 30 --min-delta 0.0005 --scheduler-patience 8 --scheduler-factor 0.5`
+
+Observed state before stopping:
+- Validation loss improved quickly early, then plateaued.
+- Earlier baseline best validation loss was around `0.2148` near epoch 12.
+- Longer run reached only about `0.2109` by epoch 53.
+- Validation accuracy stayed mostly around `0.917` to `0.922`.
+- Learning rate reductions did not produce meaningful additional gains.
+
+Decision:
+- Stop extending the same classification-only CNN.
+- The likely bottleneck is the coarse class label, especially for the `critical` transition class.
+- Next experiment: train a multi-task model that predicts both criticality class and continuous burned fraction.
+
+Reasoning:
+- The class labels are thresholded from burned fraction.
+- Two samples labeled `critical` can have very different burned fractions, such as `0.11` and `0.88`.
+- A regression head gives the model smoother information about proximity to the transition instead of only the coarse class bucket.
+
+### 2026-06-21 - Multi-Task CNN Refinement
+
+Added:
+- `scripts/train_multitask_cnn.py`
+
+Model:
+- Shared CNN feature extractor.
+- Classification head predicts:
+  - `subcritical`
+  - `critical`
+  - `supercritical`
+- Regression head predicts continuous burned fraction in `[0, 1]`.
+
+Loss:
+- `total loss = cross entropy class loss + burn_loss_weight * SmoothL1 burned-fraction loss`
+- Run used `burn_loss_weight = 1.0`.
+
+Command:
+- `python -u scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn --epochs 40 --batch-size 64 --burn-loss-weight 1.0 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
+
+Results:
+- Best epoch by validation loss: 26
+- Test accuracy: 0.8962
+- Test loss: 0.2349
+- Test burned-fraction MAE: 0.0558
+- Test burned-fraction RMSE: 0.0958
+- Saved outputs:
+  - `outputs/multitask_cnn/model.pt`
+  - `outputs/multitask_cnn/metrics.json`
+  - `outputs/multitask_cnn/training_curves.png`
+  - `outputs/multitask_cnn/confusion_matrix.png`
+
+Multi-task confusion matrix:
+
+| Actual \\ Predicted | subcritical | critical | supercritical |
+| --- | ---: | ---: | ---: |
+| subcritical | 138 | 13 | 0 |
+| critical | 15 | 147 | 11 |
+| supercritical | 0 | 8 | 121 |
+
+Comparison with baseline CNN:
+
+| Metric | Baseline CNN | Multi-task CNN |
+| --- | ---: | ---: |
+| test accuracy | 0.8940 | 0.8962 |
+| critical recall | 0.809 | 0.849 |
+| supercritical recall | 0.977 | 0.938 |
+| burned-fraction MAE | n/a | 0.0558 |
+
+Interpretation:
+- Overall accuracy improved only slightly.
+- Critical recall improved, which is valuable because critical behavior is the main target of the project.
+- The improvement came with a tradeoff: supercritical recall dropped slightly.
+- The burned-fraction head is useful for explaining proximity to the transition, even if it does not dramatically improve classification accuracy.
