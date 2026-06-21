@@ -210,22 +210,22 @@ Model:
 
 Loss:
 - `total loss = cross entropy class loss + burn_loss_weight * SmoothL1 burned-fraction loss`
-- Run used `burn_loss_weight = 1.0`.
+- Tested `burn_loss_weight` values: `0.1`, `0.5`, and `1.0`.
 
-Command:
-- `python -u scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn --epochs 40 --batch-size 64 --burn-loss-weight 1.0 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
+Recommended command:
+- `python -u scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn_w05 --epochs 40 --batch-size 64 --burn-loss-weight 0.5 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
 
 Results:
-- Best epoch by validation loss: 26
+- Best epoch by validation loss: 31
 - Test accuracy: 0.8962
-- Test loss: 0.2349
-- Test burned-fraction MAE: 0.0558
-- Test burned-fraction RMSE: 0.0958
+- Test loss: 0.2325
+- Test burned-fraction MAE: 0.0554
+- Test burned-fraction RMSE: 0.0956
 - Saved outputs:
-  - `outputs/multitask_cnn/model.pt`
-  - `outputs/multitask_cnn/metrics.json`
-  - `outputs/multitask_cnn/training_curves.png`
-  - `outputs/multitask_cnn/confusion_matrix.png`
+  - `outputs/multitask_cnn_w05/model.pt`
+  - `outputs/multitask_cnn_w05/metrics.json`
+  - `outputs/multitask_cnn_w05/training_curves.png`
+  - `outputs/multitask_cnn_w05/confusion_matrix.png`
 
 Multi-task confusion matrix:
 
@@ -237,15 +237,34 @@ Multi-task confusion matrix:
 
 Comparison with baseline CNN:
 
-| Metric | Baseline CNN | Multi-task CNN |
-| --- | ---: | ---: |
-| test accuracy | 0.8940 | 0.8962 |
-| critical recall | 0.809 | 0.849 |
-| supercritical recall | 0.977 | 0.938 |
-| burned-fraction MAE | n/a | 0.0558 |
+| Run | Test Acc | Test Loss | Burn MAE | Critical Recall | Supercritical Recall |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline CNN | 0.8940 | 0.2380 | n/a | 0.809 | 0.977 |
+| multi-task, weight 0.1 | 0.8940 | 0.2305 | 0.0547 | 0.844 | 0.938 |
+| multi-task, weight 0.5 | 0.8962 | 0.2325 | 0.0554 | 0.850 | 0.938 |
+| multi-task, weight 1.0 | 0.8962 | 0.2349 | 0.0558 | 0.850 | 0.938 |
 
 Interpretation:
 - Overall accuracy improved only slightly.
 - Critical recall improved, which is valuable because critical behavior is the main target of the project.
 - The improvement came with a tradeoff: supercritical recall dropped slightly.
 - The burned-fraction head is useful for explaining proximity to the transition, even if it does not dramatically improve classification accuracy.
+- The `0.5` and `1.0` settings produced the same classification confusion matrix; `0.5` is the preferred final setting because it has slightly lower total loss and burned-fraction error.
+
+### 2026-06-21 - Project Story Simplification
+
+Added:
+- `scripts/compare_model_results.py`
+
+Command:
+- `python scripts/compare_model_results.py --output outputs/model_comparison.md`
+
+Documentation update:
+- Replaced the original planning manifest in `README.md` with the actual project workflow and current results.
+- Final story is now:
+  1. Simulate synthetic forest-fire grids.
+  2. Label by burned fraction.
+  3. Train a baseline CNN.
+  4. Show that longer classification-only training plateaus.
+  5. Add a burned-fraction regression head to improve critical-region recall.
+  6. Use CNN feature-space PCA to show learned ordering by criticality.

@@ -107,17 +107,17 @@ This gives the model a smoother training signal. The class labels are created by
 
 Training command:
 
-`python scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn --epochs 40 --batch-size 64 --burn-loss-weight 1.0 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
+`python scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn_w05 --epochs 40 --batch-size 64 --burn-loss-weight 0.5 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
 
 Multi-task result:
 
 | Metric | Value |
 | --- | ---: |
-| best epoch by validation loss | 26 |
+| best epoch by validation loss | 31 |
 | test accuracy | 0.8962 |
-| test loss | 0.2349 |
-| burned-fraction MAE | 0.0558 |
-| burned-fraction RMSE | 0.0958 |
+| test loss | 0.2325 |
+| burned-fraction MAE | 0.0554 |
+| burned-fraction RMSE | 0.0956 |
 
 Multi-task confusion matrix:
 
@@ -129,11 +129,13 @@ Multi-task confusion matrix:
 
 Compared with the baseline CNN, the multi-task model slightly improved overall test accuracy from `0.8940` to `0.8962`. More importantly, it improved critical-class recall from `140/173 = 0.809` to `147/173 = 0.849`. This is useful because the critical class is the most important transition region. The tradeoff is that supercritical recall dropped slightly from `126/129 = 0.977` to `121/129 = 0.938`.
 
+I also swept the burned-fraction loss weight with values `0.1`, `0.5`, and `1.0`. The `0.5` and `1.0` settings produced the same classification confusion matrix on the test split, while `0.5` had slightly better total loss and burned-fraction error. For that reason, I use `0.5` as the final recommended multi-task configuration.
+
 Multi-task figures:
 
-`outputs/multitask_cnn/training_curves.png`
+`outputs/multitask_cnn_w05/training_curves.png`
 
-`outputs/multitask_cnn/confusion_matrix.png`
+`outputs/multitask_cnn_w05/confusion_matrix.png`
 
 ## Analysis
 
