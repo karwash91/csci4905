@@ -96,11 +96,38 @@ The baseline CNN performed well enough to validate the synthetic-data workflow. 
 
 Most errors occur in the critical class. This makes sense because the critical class represents the transition region, where samples can resemble either nearby extreme depending on the exact tree connectivity. The model appears to learn a useful density/connectivity signal rather than simply memorizing one class.
 
+## Feature Space Analysis
+
+To better understand what the CNN learned internally, I extracted the 64-dimensional feature vector immediately before the classifier head and projected those features into two dimensions using PCA.
+
+Feature-space output:
+
+`outputs/feature_space/cnn_feature_pca.png`
+
+PCA explained variance:
+
+| Component | Explained Variance |
+| --- | ---: |
+| PC1 | 0.9166 |
+| PC2 | 0.0481 |
+
+Class centroids in PCA space:
+
+| Class | PC1 | PC2 |
+| --- | ---: | ---: |
+| subcritical | -7.4876 | -0.5159 |
+| critical | 0.7966 | 1.0712 |
+| supercritical | 7.7359 | -0.8299 |
+
+The PCA plot shows that the learned representation is strongly ordered by criticality. Subcritical samples cluster on one side, supercritical samples cluster on the other, and critical samples mostly sit between them. This supports the idea that the CNN learned a meaningful transition-related representation rather than only memorizing labels.
+
+The critical class still overlaps with nearby regions, which matches the confusion matrix. This is expected because critical samples are boundary cases between fires that die out and fires that spread across most of the map.
+
 ## Limitations
 
 The simulator is intentionally simple. It does not model wind, terrain, moisture, regrowth, variable ignition probability, or real satellite imagery. The labels are based on a practical burned-fraction threshold rather than a mathematically exact critical point.
 
-The model is also a baseline. It uses only the initial grid state and predicts the eventual criticality class. More advanced approaches could include time-series frames, richer simulation parameters, or learned latent-space analysis.
+The model is also a baseline. It uses only the initial grid state and predicts the eventual criticality class. More advanced approaches could include time-series frames, richer simulation parameters, or a dedicated autoencoder/VAE trained directly on the grid states.
 
 ## Next Steps
 
@@ -109,6 +136,5 @@ Potential extensions:
 - Train on larger `128x128` grids.
 - Add stochastic spread probabilities.
 - Include time-series snapshots from the simulation.
-- Train an autoencoder or VAE to study latent clustering near the critical transition.
+- Train an autoencoder or VAE to compare its latent clustering against the CNN feature-space PCA.
 - Compare the local simulator against `gym_forestfire` or another established forest-fire model.
-

@@ -128,3 +128,36 @@ Interpretation:
 - The `critical` class has the weakest recall because it is the ambiguous transition class.
 - The model is strongest on `supercritical` recall, correctly identifying nearly all high-spread simulations.
 - The report draft now has sections for introduction, data generation, model, results, analysis, limitations, and next steps.
+
+### 2026-06-21 - CNN Feature-Space Analysis
+
+Added:
+- `scripts/analyze_latent_space.py`
+
+Command:
+- `python scripts/analyze_latent_space.py --data-dir data/synthetic --model-path outputs/baseline_cnn/model.pt --output-dir outputs/feature_space`
+
+Method:
+- Loaded the trained baseline CNN.
+- Extracted the 64-dimensional feature vector before the classifier head for all 3000 samples.
+- Projected the feature vectors into two dimensions using PCA.
+- Plotted the embedding colored by criticality label.
+
+Results:
+- Feature shape: `(3000, 64)`
+- PCA explained variance:
+  - PC1: 0.9166
+  - PC2: 0.0481
+- Class centroids:
+  - subcritical: `[-7.4876, -0.5159]`
+  - critical: `[0.7966, 1.0712]`
+  - supercritical: `[7.7359, -0.8299]`
+- Saved outputs:
+  - `outputs/feature_space/cnn_feature_pca.png`
+  - `outputs/feature_space/feature_space_summary.json`
+
+Interpretation:
+- The CNN feature space is strongly ordered by criticality along PC1.
+- Critical samples mostly sit between subcritical and supercritical samples.
+- This supports the claim that the classifier learned a meaningful transition-related representation.
+- Some overlap around the critical region is expected because those samples represent boundary behavior.
