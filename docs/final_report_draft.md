@@ -1,14 +1,24 @@
-# Synthetic Forest Fire Criticality Detection
+# Synthetic Forest Fire Generation and Criticality Detection
 
 ## Introduction
 
-This project explores whether a neural network can detect critical behavior in a synthetic forest-fire system. The main idea is to simulate many forest grids, run a simple fire-spread process, label each sample by how much of the forest eventually burns, and train a convolutional neural network to classify the result as subcritical, critical, or supercritical.
+This project studies whether a neural network can generate and evaluate simple forest-fire examples. I generated many forest grids, started a few fires, let the fire spread, and then labeled each example based on how much of the forest burned.
 
-The project is inspired by self-organized criticality and phase-transition problems. Near a critical threshold, small local changes can produce much larger system-level effects. In this project, the threshold is represented by whether a fire dies out quickly, spreads through part of the forest, or burns almost the entire connected tree structure.
+The three labels are:
 
-## Data Generation
+- `subcritical`: the fire burns only a small part of the forest
+- `critical`: the fire burns a medium amount
+- `supercritical`: the fire burns almost everything connected to it
 
-I implemented a local NumPy cellular automaton instead of relying on an external simulator. Each grid cell has one of four states:
+The generative part of the project uses a conditional VAE to create new forest layouts for a requested class. I then run the simulator on those generated grids to check whether they actually behave like the requested class.
+
+The main lesson is that generation and classification both need to be tested carefully. The conditional VAE can generate examples that match the requested class on the broad dataset, but that dataset also has a tree-density shortcut. After I controlled density, the layout of the trees became much more important. The best neural approach for the layout task was not just predicting the class directly, but first predicting which cells would burn.
+
+This project was also a good example of using an AI coding assistant productively. I used Codex to help brainstorm experiments, write and revise scripts, debug results, and turn the project into a clearer report. The important part was not just asking for code, but using the assistant to ask better questions about what the model was actually learning.
+
+## Simulation
+
+I built a simple forest-fire simulator with NumPy. Each grid cell has one of four values:
 
 | Value | Meaning |
 | ---: | --- |
@@ -17,9 +27,9 @@ I implemented a local NumPy cellular automaton instead of relying on an external
 | 2 | burning tree |
 | 3 | burned tree |
 
-Each simulation starts by sampling a random tree grid at a chosen density. A few occupied cells are ignited, then fire spreads through adjacent trees using a 4-neighbor rule. The simulation stops when no burning cells remain.
+Each simulation starts with a random forest and a few burning trees. At each step, fire spreads to neighboring trees up, down, left, or right. The simulation stops when no trees are burning.
 
-Each sample is labeled by final burned fraction:
+Each example is labeled by final burned fraction:
 
 | Label | Burned Fraction |
 | --- | --- |
@@ -27,9 +37,7 @@ Each sample is labeled by final burned fraction:
 | critical | `0.10` to `< 0.90` |
 | supercritical | `>= 0.90` |
 
-The final dataset contains 3000 generated samples at `64x64` resolution.
-
-Class distribution:
+The first dataset contains 3000 generated `64x64` grids:
 
 | Class | Count |
 | --- | ---: |
@@ -37,42 +45,58 @@ Class distribution:
 | critical | 1144 |
 | supercritical | 853 |
 
-Example grid figure:
+Example output: `outputs/synthetic_examples.png`
 
-`outputs/synthetic_examples.png`
+## Conditional VAE Generator
 
-## Model
+To make the project clearly generative, I trained a conditional variational autoencoder, or conditional VAE. This is similar to the VAE idea from Project 2, but with one extra input: the requested fire-spread class.
 
-The baseline model is a small convolutional neural network. The input is a one-channel `64x64` grid normalized from cell states `0..3` into the range `0..1`.
+The model learns to generate a forest layout for one of these requested labels:
 
-Architecture summary:
+- `subcritical`
+- `critical`
+- `supercritical`
 
-- 3 convolution blocks
-- ReLU activations
-- Max pooling in the first two blocks
-- Adaptive average pooling
-- Small fully connected classifier
+The model outputs a probability map for where trees should appear. I sample a new forest grid from that probability map, add a few starting fires, and run the same simulator used for the training data. This lets me check whether the generated forest actually produces the requested class.
 
-Training setup:
+Training command:
 
-| Setting | Value |
-| --- | --- |
-| loss | cross entropy |
-| optimizer | Adam |
-| learning rate | 0.001 |
-| batch size | 64 |
-| epochs | 15 |
-| split | stratified 70/15/15 |
+`python scripts/train_conditional_vae.py --data-dir data/synthetic --output-dir outputs/conditional_vae --epochs 18 --batch-size 64 --latent-dim 32 --beta 0.05 --generated-per-class 40`
 
-## Results
+Generated-sample check:
 
-The CNN achieved:
+| Requested Class | Generated Samples | Simulator Match Rate | Mean Burned Fraction |
+| --- | ---: | ---: | ---: |
+| subcritical | 40 | 1.000 | 0.019 |
+| critical | 40 | 0.975 | 0.480 |
+| supercritical | 40 | 1.000 | 0.982 |
+| overall | 120 | 0.992 | n/a |
+
+Generated-sample matrix:
+
+| Requested \ Simulated | subcritical | critical | supercritical |
+| --- | ---: | ---: | ---: |
+| subcritical | 40 | 0 | 0 |
+| critical | 1 | 39 | 0 |
+| supercritical | 0 | 0 | 40 |
+
+Example output: `outputs/conditional_vae/generated_examples.png`
+
+This shows that the conditional VAE can generate forest grids that usually behave like the requested class after simulation. However, this result should be read carefully. On the broad dataset, class is strongly related to tree density, so the VAE is partly learning how dense each class should look. That is still a valid generative result, but it also motivates the later shortcut tests.
+
+## Baseline CNN
+
+The first model was a small convolutional neural network. It takes the initial forest grid as input and predicts one of the three labels.
+
+The baseline CNN performed well:
 
 | Metric | Value |
 | --- | ---: |
-| best validation accuracy | 0.9196 |
 | test accuracy | 0.8940 |
 | test loss | 0.2380 |
+| critical recall | 0.809 |
+
+Here, `critical recall` means: out of all examples that were actually critical, how many did the model correctly find?
 
 Confusion matrix:
 
@@ -82,108 +106,182 @@ Confusion matrix:
 | critical | 18 | 140 | 15 |
 | supercritical | 0 | 3 | 126 |
 
-Training curves:
+This result showed that the CNN could predict the fire outcome from the starting grid. However, accuracy alone did not show what the CNN was using to make its decision.
 
-`outputs/baseline_cnn/training_curves.png`
+At this point, Codex helped suggest a useful follow-up question: was the CNN learning tree layout, or was it mostly using a simpler shortcut like tree density? That led to the next set of tests.
 
-Confusion matrix figure:
+## Adding Burned Fraction Prediction
 
-`outputs/baseline_cnn/confusion_matrix.png`
+The class labels come from burned fraction, so I also trained a model to predict burned fraction directly. This is similar to Project 1, where changing the output and tracking better metrics helped explain what the model was learning.
 
-## Model Refinement: Multi-Task CNN
+The model had two outputs:
 
-The baseline classifier plateaued after a short training run. Longer training with validation-loss monitoring only produced tiny improvements, so I added a second prediction objective instead of simply training longer.
+- the three-class prediction
+- the predicted burned fraction
 
-The refined model uses the same CNN feature extractor, but has two output heads:
+The best neural result came from using the predicted burned fraction and then applying class cutoffs to it.
 
-- a classification head for `subcritical`, `critical`, and `supercritical`
-- a regression head for continuous burned fraction
+| Method | Accuracy | Critical Recall |
+| --- | ---: | ---: |
+| baseline CNN | 0.8940 | 0.809 |
+| multi-output CNN class prediction | 0.8962 | 0.850 |
+| burned-fraction prediction with tuned cutoffs | 0.9007 | 0.873 |
 
-The combined loss is:
+The tuned cutoffs were `0.1100` and `0.8914`, which are close to the original cutoffs of `0.10` and `0.90`. This suggests the model learned a useful estimate of burned fraction, not just a random extra output.
 
-`total loss = cross entropy class loss + burned fraction SmoothL1 loss`
+## Testing For A Density Shortcut
 
-This gives the model a smoother training signal. The class labels are created by thresholding burned fraction, so the regression task gives extra information about where each sample sits inside or near a class boundary.
+Next, I wanted to know whether the CNN was really using tree layout or mostly using tree density. Tree density means the percentage of grid cells that contain trees.
 
-Training command:
+I tested this in two ways:
 
-`python scripts/train_multitask_cnn.py --data-dir data/synthetic --output-dir outputs/multitask_cnn_w05 --epochs 40 --batch-size 64 --burn-loss-weight 0.5 --patience 15 --scheduler-patience 5 --scheduler-factor 0.5`
+- Density-only test: predict using only tree density.
+- Shuffled-grid test: keep the same number of trees, but randomly move them around.
 
-Multi-task result:
+| Check | Accuracy | Critical Recall |
+| --- | ---: | ---: |
+| density-only prediction | 0.8764 | 0.832 |
+| CNN on normal grids | 0.8940 | 0.809 |
+| CNN on shuffled grids | 0.8896 | 0.803 |
 
-| Metric | Value |
+The shuffled-grid CNN was almost as accurate as the normal CNN. This means the first dataset was mostly driven by density. The CNN was still learning something useful, but it did not need much information about where the trees were placed.
+
+This changed the direction of the project. The original task was too easy because density alone explained a lot of the answer.
+
+This was one of the most useful places for AI assistance. Instead of only trying to increase accuracy, Codex helped suggest checking for shortcuts with a density-only model and a shuffled-grid test. Those tests made the project stronger because they showed a weakness in the first dataset.
+
+## Fixed-Density Layout Dataset
+
+To make layout matter more, I generated a second dataset where every grid has the same density: `0.55`. Since density is fixed, the model cannot use density as the main shortcut.
+
+Instead, the dataset changes how the trees are arranged:
+
+- random layout
+- clustered layout
+- fragmented layout
+
+This dataset is balanced:
+
+| Class | Count |
 | --- | ---: |
-| best epoch by validation loss | 31 |
-| test accuracy | 0.8962 |
-| test loss | 0.2325 |
-| burned-fraction MAE | 0.0554 |
-| burned-fraction RMSE | 0.0956 |
+| subcritical | 500 |
+| critical | 500 |
+| supercritical | 500 |
 
-Multi-task confusion matrix:
+Example output: `outputs/spatial_examples.png`
+
+The results changed:
+
+| Check | Accuracy | Critical Recall |
+| --- | ---: | ---: |
+| density-only prediction | 0.3333 | 0.000 |
+| CNN on normal grids | 0.6667 | 0.000 |
+| CNN on shuffled grids | 0.3333 | 0.000 |
+
+Since there are three classes, chance accuracy is about `0.3333`. The density-only method dropped to chance, as expected. The CNN did better on normal grids, but went back to chance when the grids were shuffled. This shows that tree layout mattered in the fixed-density dataset.
+
+However, the direct CNN still missed the critical class. It learned the easier difference between low-burn and high-burn examples, but it did not handle the middle cases well.
+
+The fixed-density dataset also came from that same back-and-forth process. Codex helped suggest controlling density so the model would have to use layout instead of relying on the number of trees.
+
+## Predicting The Burned Area
+
+A human would probably not solve this by guessing the class immediately. A human would trace which trees are connected to the fire, estimate what area burns, and then decide the class.
+
+To make the model closer to that process, I trained a small image-to-image CNN to predict the burned area first. This type of model is often called a U-Net, but the important idea is simple: instead of outputting one label, it outputs a whole grid. The input has two channels:
+
+- where the trees are
+- where the fire starts
+
+The output is a predicted burn mask. A `mask` is just a grid that marks which cells belong to something. In this case, it marks which cells the model thinks will burn.
+
+After the model predicts the burn mask, I calculate the predicted burned fraction and convert that into the three labels.
+
+On the fixed-density dataset, this was the strongest neural result for layout:
+
+| Model | Accuracy | Critical Recall | Mask Overlap | Pixel Accuracy |
+| --- | ---: | ---: | ---: | ---: |
+| direct CNN classifier | 0.6667 | 0.000 | n/a | n/a |
+| burn-mask U-Net | 0.6800 | 0.747 | 0.651 | 0.941 |
+
+`Mask overlap` measures how much the predicted burned area overlaps with the true burned area. Higher is better.
+
+Burn-mask confusion matrix:
 
 | Actual \ Predicted | subcritical | critical | supercritical |
 | --- | ---: | ---: | ---: |
-| subcritical | 138 | 13 | 0 |
-| critical | 15 | 147 | 11 |
-| supercritical | 0 | 8 | 121 |
+| subcritical | 34 | 41 | 0 |
+| critical | 10 | 56 | 9 |
+| supercritical | 0 | 12 | 63 |
 
-Compared with the baseline CNN, the multi-task model slightly improved overall test accuracy from `0.8940` to `0.8962`. More importantly, it improved critical-class recall from `140/173 = 0.809` to `147/173 = 0.849`. This is useful because the critical class is the most important transition region. The tradeoff is that supercritical recall dropped slightly from `126/129 = 0.977` to `121/129 = 0.938`.
+The burn-mask model found `56/75` critical examples. The direct CNN found none. Its total accuracy only improved a little because it sometimes called subcritical examples critical, but it was much better at finding the middle class.
 
-I also swept the burned-fraction loss weight with values `0.1`, `0.5`, and `1.0`. The `0.5` and `1.0` settings produced the same classification confusion matrix on the test split, while `0.5` had slightly better total loss and burned-fraction error. For that reason, I use `0.5` as the final recommended multi-task configuration.
+This was the clearest neural-network evidence that layout can be learned.
 
-Multi-task figures:
+This experiment was another place where Codex was useful. After the direct classifier missed the critical class, Codex suggested thinking about how a human would solve the problem: trace the burn area first, then classify it. That led to the burn-mask model.
 
-`outputs/multitask_cnn_w05/training_curves.png`
+## Connectivity Baseline
 
-`outputs/multitask_cnn_w05/confusion_matrix.png`
+Finally, I compared the neural models to simple hand-made features based on connectivity.
 
-## Analysis
+A connected component is a group of trees that touch each other through up, down, left, or right neighbors. This matters because fire can only spread through connected trees.
 
-The baseline CNN performed well enough to validate the synthetic-data workflow. It learned to separate the two extreme cases reliably: subcritical fires almost never get confused with supercritical fires.
+I tested three simple baselines:
 
-Most errors occur in the critical class. This makes sense because the critical class represents the transition region, where samples can resemble either nearby extreme depending on the exact tree connectivity. The model appears to learn a useful density/connectivity signal rather than simply memorizing one class.
+- density only
+- largest connected group of trees
+- trees connected to the starting fire
 
-The multi-task model supports the same conclusion while improving the transition-region behavior. Predicting burned fraction gave the network a continuous target that better reflects the underlying simulation. This did not radically improve overall accuracy, but it made the model better at identifying critical examples, which is the most relevant class for this project.
+The last one is not a fair learned model. It is more like an answer key for this simple simulator, because the fire always spreads by the same neighbor rule. I included it to show what physical rule the neural networks are trying to learn.
 
-## Feature Space Analysis
+| Dataset | Baseline | Accuracy | Critical Recall |
+| --- | --- | ---: | ---: |
+| first dataset | density-only | 0.8764 | 0.832 |
+| first dataset | largest connected group | 0.9294 | 0.925 |
+| first dataset | connected to starting fire | 1.0000 | 1.000 |
+| fixed-density | density-only | 0.3333 | 0.000 |
+| fixed-density | largest connected group | 0.7111 | 0.213 |
+| fixed-density | connected to starting fire | 1.0000 | 1.000 |
 
-To better understand what the CNN learned internally, I extracted the 64-dimensional feature vector immediately before the classifier head and projected those features into two dimensions using PCA.
+These results explain the project clearly. Density is useful, but connected tree structure is more important. The neural models learn part of that structure, while the hand-made connectivity rule captures it directly.
 
-Feature-space output:
+Codex also helped suggest this simple connectivity baseline. This was helpful because it gave an easy-to-understand comparison against the neural networks and showed why the burn-mask model made sense.
 
-`outputs/feature_space/cnn_feature_pca.png`
+## Discussion
 
-PCA explained variance:
+The project followed a clear path.
 
-| Component | Explained Variance |
-| --- | ---: |
-| PC1 | 0.9166 |
-| PC2 | 0.0481 |
+First, I added a generative model. The conditional VAE generated new forest layouts and `119/120` generated samples simulated into the requested class.
 
-Class centroids in PCA space:
+Second, the baseline CNN looked successful with `0.8940` test accuracy. The burned-fraction model improved this to `0.9007`.
 
-| Class | PC1 | PC2 |
-| --- | ---: | ---: |
-| subcritical | -7.4876 | -0.5159 |
-| critical | 0.7966 | 1.0712 |
-| supercritical | 7.7359 | -0.8299 |
+Third, the shortcut tests showed that this success was not the full story. On the first dataset, density explained most of the result.
 
-The PCA plot shows that the learned representation is strongly ordered by criticality. Subcritical samples cluster on one side, supercritical samples cluster on the other, and critical samples mostly sit between them. This supports the idea that the CNN learned a meaningful transition-related representation rather than only memorizing labels.
+Fourth, the fixed-density dataset removed that shortcut. In that dataset, layout mattered. The direct CNN still missed the middle class, but the burn-mask model found many critical examples because it learned a more useful intermediate task.
 
-The critical class still overlaps with nearby regions, which matches the confusion matrix. This is expected because critical samples are boundary cases between fires that die out and fires that spread across most of the map.
+The main takeaway is that the target matters. A generative model can create useful examples, but it can also reflect shortcuts in the data. Directly predicting a class can also lead the model to use shortcuts. Predicting burned fraction or the burned area gives the model information that better matches the real fire process.
+
+Overall, this class project was very AI-assistant friendly because there were many small decisions to make: what model to try, what baseline to compare against, how to test for shortcuts, and how to explain the results. Codex helped with those steps, but the final report still depends on running the experiments and checking whether the results actually support the story.
 
 ## Limitations
 
-The simulator is intentionally simple. It does not model wind, terrain, moisture, regrowth, variable ignition probability, or real satellite imagery. The labels are based on a practical burned-fraction threshold rather than a mathematically exact critical point.
+The simulator is simple. It does not include wind, terrain, moisture, regrowth, random fire spread, or real satellite images. The labels are practical cutoffs based on burned fraction, not exact scientific critical points.
 
-The model is also a baseline. It uses only the initial grid state and predicts the eventual criticality class. More advanced approaches could include time-series frames, richer simulation parameters, or a dedicated autoencoder/VAE trained directly on the grid states.
+The connectivity baseline is also not a normal machine-learning model. It uses knowledge of how the simulator works. I used it to explain the physical pattern behind the results.
 
 ## Next Steps
 
-Potential extensions:
+Possible next steps:
 
+- Add random spread probability so connected trees do not always burn.
+- Train the conditional VAE on the fixed-density layout dataset.
 - Train on larger `128x128` grids.
-- Add stochastic spread probabilities.
-- Include time-series snapshots from the simulation.
-- Train an autoencoder or VAE to compare its latent clustering against the CNN feature-space PCA.
-- Compare the local simulator against `gym_forestfire` or another established forest-fire model.
+- Predict fire spread one step at a time.
+- Test examples near density `0.5927`, where large connected tree groups start to appear on square grids.
+- Add wind, terrain, or moisture.
+
+## Conclusion
+
+The conditional VAE added a real generative AI component by creating new forest layouts for requested fire-spread classes. The first CNN result was also good, but it mostly used density. After controlling density, tree layout mattered. The direct classifier still struggled with the critical middle class, but the burn-mask model recovered many of those examples by predicting the burned area first.
+
+The strongest conclusion is that the model should match the process being modeled. For this forest-fire task, generation was useful, but evaluation mattered just as much. Predicting an intermediate spatial result was more useful than predicting the final class directly.
