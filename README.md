@@ -10,16 +10,13 @@ This project simulates forest-fire spread, trains a conditional VAE to generate 
 6. Connectivity baselines explain the physical mechanism: reachable connected tree structure is the real signal.
 
 Generated data, plots, and model weights are ignored by Git.
+The `docs/` directory is also local-only so reports, slides, notes, and reference PDFs can be submitted separately without cluttering the code repository.
 
 ## Submission Contents
 
 | Path | Purpose |
 | --- | --- |
 | `README.md` | project overview and reproduction commands |
-| `docs/final_report_draft.md` | final written report |
-| `docs/final_project_slide_deck.md` | slide-deck outline |
-| `docs/final_project_narration_script.md` | presentation speaker notes |
-| `docs/research_notes.md` | research references used for background |
 | `src/forest_fire_sim.py` | forest-fire simulator |
 | `scripts/` | data generation, model training, ablations, and slide builder |
 
@@ -122,7 +119,9 @@ Connectivity baselines:
 | fixed-density | largest connected component | 0.7111 | 0.213 |
 | fixed-density | ignition-reachable component | 1.0000 | 1.000 |
 
-## Report And Logs
+## Local Docs
+
+These files are useful for submission/presentation, but ignored by Git:
 
 - `docs/final_report_draft.md` - simplified final report
 - `docs/final_project_slide_deck.md` - presentation slide outline
