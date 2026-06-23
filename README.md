@@ -9,17 +9,6 @@ This project simulates forest-fire spread, trains a conditional VAE to generate 
 5. A burn-mask U-Net recovers many critical examples by predicting the burned region first.
 6. Connectivity baselines explain the physical mechanism: reachable connected tree structure is the real signal.
 
-Generated data, plots, and model weights are ignored by Git.
-The `docs/` directory is also local-only so reports, slides, notes, and reference PDFs can be submitted separately without cluttering the code repository.
-
-## Submission Contents
-
-| Path | Purpose |
-| --- | --- |
-| `README.md` | project overview and reproduction commands |
-| `src/forest_fire_sim.py` | forest-fire simulator |
-| `scripts/` | data generation, model training, ablations, and slide builder |
-
 ## Setup
 
 ```bash
