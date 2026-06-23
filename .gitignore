@@ -23,6 +23,7 @@ runs/
 
 # Local/reference material not needed in the submission repo
 docs/
+scripts/build_slide_deck.py
 scripts/analyze_latent_space.py
 scripts/compare_model_results.py
 scripts/summarize_results.py
